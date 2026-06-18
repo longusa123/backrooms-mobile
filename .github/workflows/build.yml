@@ -47,47 +47,71 @@ jobs:
     - name: 6. Cài đặt các Thư viện Phụ thuộc
       run: npm install
 
-    - name: 7. Tự động nhận diện và Xử lý Đồ họa Thông minh
+    - name: 7. Bộ lọc Phân cấp Tài nguyên Đồ họa (Xử lý file đánh số bản sao)
       run: |
-        echo "🔍 Đang quét và kiểm tra tài nguyên hình ảnh..."
+        echo "🔍 Hệ thống kích hoạt Bộ lọc Phân cấp Thuật toán..."
         mkdir -p assets
-        
-        # 🤖 CƠ CHẾ TỰ ĐỘNG NHẬN DIỆN ICON THAY THẾ
-        HAS_IMAGE=false
-        
-        if [ -f "assets/icon.png" ]; then
-          echo "✅ Đã tìm thấy file icon.png chuẩn."
-          HAS_IMAGE=true
-        elif [ -f "assets/texture.png" ]; then
-          echo "💡 Không thấy icon.png nhưng phát hiện texture.png! Tự động chọn làm Icon game."
-          cp assets/texture.png assets/icon.png
-          HAS_IMAGE=true
-        elif [ -f "assets/logo.png" ]; then
-          echo "💡 Không thấy icon.png nhưng phát hiện logo.png! Tự động chọn làm Icon game."
-          cp assets/logo.png assets/icon.png
-          HAS_IMAGE=true
+        HAS_PROCESSING=false
+
+        # ==========================================
+        # 🖼️ PHẦN 1: TỰ ĐỘNG ĐỊNH VỊ MÀN HÌNH CHÀO (SPLASH)
+        # ==========================================
+        if [ -f "assets/splash.png" ] || [ -f "assets/splash.jpg" ] || [ -f "assets/splash.jpeg" ]; then
+          echo "✅ Đã có file Màn hình chào chuẩn cấu trúc."
+          # Nếu là đuôi jpg/jpeg thì đổi về png cho đúng chuẩn Capacitor
+          if [ ! -f "assets/splash.png" ]; then
+            cp assets/splash.* assets/splash.png
+          fi
+          HAS_PROCESSING=true
+        else
+          # Truy lùng các file có tên chứa từ khóa nền (kể cả bản sao như bg1.png, background_copy.jpg)
+          SPLASH_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -E -i "splash|bg|background|screen" | head -n 1)
+          if [ ! -z "$SPLASH_FALLBACK" ]; then
+            echo "💡 Không có splash gốc, tự động ép file bản sao [$SPLASH_FALLBACK] làm Màn hình chào."
+            cp "$SPLASH_FALLBACK" assets/splash.png
+            HAS_PROCESSING=true
+          fi
         fi
 
-        # 🤖 CƠ CHẾ TỰ ĐỘNG NHẬN DIỆN SPLASH THAY THẾ
-        if [ -f "assets/splash.png" ]; then
-          echo "✅ Đã tìm thấy file splash.png chuẩn."
-          HAS_IMAGE=true
-        elif [ -f "assets/background.png" ]; then
-          echo "💡 Không thấy splash.png nhưng phát hiện background.png! Tự động chọn làm Màn hình chào."
-          cp assets/background.png assets/splash.png
-          HAS_IMAGE=true
-        fi
-
-        # 🚀 TIẾN HÀNH XỬ LÝ NẾU CÓ ẢNH HỢP LỆ
-        if [ "$HAS_IMAGE" = true ]; then
-          echo "📦 Đang cài đặt công cụ xử lý đồ họa nâng cao..."
-          npm install @capacitor/assets
+        # ==========================================
+        # 📸 PHẦN 2: TỰ ĐỘNG ĐỊNH VỊ APP ICON (ƯU TIÊN FILE GỐC -> FILE ĐÁNH SỐ)
+        # ==========================================
+        if [ -f "assets/icon.png" ] || [ -f "assets/icon.jpg" ] || [ -f "assets/icon.jpeg" ]; then
+          echo "✅ Đã định vị được App Icon gốc chuẩn chỉnh."
+          if [ ! -f "assets/icon.png" ]; then
+            cp assets/icon.* assets/icon.png
+          fi
+          HAS_PROCESSING=true
+        else
+          echo "⚠️ Không thấy icon.png gốc. Bắt đầu quét tìm các bản sao đánh số hoặc tên khác..."
           
-          echo "📸 Đang tự động tối ưu hóa và xuất bản vẽ thiết kế ảnh..."
-          # FIX: Loại bỏ hoàn toàn flag --icon / --splash lỗi, dùng lệnh chuẩn hóa hệ điều hành
+          # Ưu tiên 1: Tìm các file chứa chữ 'icon' bị đánh số hoặc thêm chữ copy (Ví dụ: icon1.png, icon (1).jpg, icon_copy.png)
+          ICON_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -E -i "icon" | head -n 1)
+          
+          # Ưu tiên 2: Nếu không có chữ 'icon', tìm sang các file đặt tên kiểu: logo, texture, app, main
+          if [ -z "$ICON_FALLBACK" ]; then
+            ICON_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -E -i "logo|texture|app|main" | head -n 1)
+          fi
+          
+          # Ưu tiên 3: Bí quá thì hốt đại file ảnh đầu tiên trong thư mục (trừ file splash đã xử lý ở trên)
+          if [ -z "$ICON_FALLBACK" ]; then
+            ICON_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -v "splash" | head -n 1)
+          fi
+
+          if [ ! -z "$ICON_FALLBACK" ]; then
+            echo "🎯 Thành công! Thuật toán đã chọn file [$ICON_FALLBACK] để đúc thành App Icon."
+            cp "$ICON_FALLBACK" assets/icon.png
+            HAS_PROCESSING=true
+          fi
+        fi
+
+        # Kích hoạt dây chuyền cắt ảnh tự động nếu phát hiện tài nguyên hợp lệ
+        if [ "$HAS_PROCESSING" = true ]; then
+          echo "📦 Khởi động dây chuyền sản xuất asset Android..."
+          npm install @capacitor/assets
           npx capacitor-assets generate --android
         else
-          echo "⏭️ Không phát hiện bất kỳ file ảnh nào hợp lệ (icon, texture, logo, splash). Bỏ qua bước này và giữ icon mặc định."
+          echo "⏭️ Thư mục trống hoàn toàn. Giữ nguyên bộ icon mặc định của hệ thống."
         fi
 
     - name: 8. Đồng bộ Code Web vào Dự án Android
