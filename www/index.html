@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Backrooms Mobile 3D</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Nhúng thư viện Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <!-- Canvas hiển thị đồ họa 3D -->
+    <div id="game-container"></div>
+
+    <!-- UI Crosshair tâm ngắm -->
+    <div id="crosshair">+</div>
+
+    <!-- Vùng điều khiển Joystick (Góc dưới bên trái) -->
+    <div id="joystick-zone">
+        <div id="joystick-container">
+            <div id="joystick-knob"></div>
+        </div>
+    </div>
+
+    <!-- Vùng cảm ứng để xoay Camera (Toàn màn hình hoặc nửa bên phải) -->
+    <div id="look-zone"></div>
+
+    <script src="game.js"></script>
+</body>
+</html>
