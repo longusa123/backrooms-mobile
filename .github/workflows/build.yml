@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Ultimate Android CI/CD Pipeline
 
 on:
   push:
@@ -8,37 +8,120 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-    - name: Checkout Source Code
+    - name: 1. Tải mã nguồn từ Repository
       uses: actions/checkout@v4
 
-    - name: Set up Java JDK 17
+    - name: 2. Thiết lập Môi trường Java JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Install Node.js
+    - name: 3. Thiết lập Môi trường Node.js 22
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
 
-    - name: Install Dependencies
+    - name: 4. Bật Bộ nhớ đệm Cache cho Node Modules (Tăng tốc build)
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: 5. Bật Bộ nhớ đệm Cache cho Gradle (Tăng tốc build Android)
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: 6. Cài đặt các Thư viện Phụ thuộc
+      run: npm install
+
+    - name: 7. Tự động nhận diện và Xử lý Đồ họa (Icon & Splash Screen)
       run: |
-        npm install
+        if [ -f "assets/icon.png" ] || [ -f "assets/splash.png" ]; then
+          echo "🚀 Phát hiện tài nguyên! Đang thiết lập công cụ đồ họa..."
+          npm install @capacitor/assets
+          
+          if [ -f "assets/icon.png" ]; then
+            echo "📸 Đang tự động cắt hệ thống App Icon cho mọi màn hình..."
+            npx capacitor-assets generate --android --icon
+          fi
+          
+          if [ -f "assets/splash.png" ]; then
+            echo "🖼️ Đang tự động thiết lập Màn hình chào (Splash Screen) dọc..."
+            npx capacitor-assets generate --android --splash
+          fi
+        else
+          echo "⏭️ Không phát hiện file ảnh mới trong assets/. Giữ nguyên giao diện mặc định."
+        fi
 
-    - name: Sync Capacitor
+    - name: 8. Đồng bộ Code Web vào Dự án Android
       run: npx cap sync android
 
-    - name: Build APK with Gradle
+    - name: 9. Giải mã Chìa khóa Bí mật Keystore từ GitHub Secrets
+      run: |
+        if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          echo "❌ Lỗi bảo mật: Bạn chưa cấu hình KEYSTORE_BASE64 trong mục Settings > Secrets!"
+          exit 1
+        fi
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+    - name: 10. Biên dịch và Ký số Bảo mật APK (Chống Play Protect chặn)
       run: |
         cd android
         chmod +x ./gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleRelease \
+          -Pandroid.injected.signing.store.file=release.keystore \
+          -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+          -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+          -Pandroid.injected.signing.key.password="${{ secrets.KEYSTORE_PASSWORD }}"
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
+    - name: 11. Nhận diện Phiên bản và Đổi tên File APK Động
+      id: apk_process
+      run: |
+        APP_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.0")
+        REAL_APK_PATH=$(find android/app/build/outputs/apk/release/ -name "*release*.apk" | head -n 1)
+        
+        if [ -z "$REAL_APK_PATH" ]; then
+          echo "❌ Thất bại: Không tìm thấy file APK Release được sinh ra!"
+          exit 1
+        fi
+        
+        mkdir -p ready-to-publish
+        FINAL_NAME="Backrooms-Mobile-v${APP_VERSION}-Signed.apk"
+        cp "$REAL_APK_PATH" "ready-to-publish/${FINAL_NAME}"
+        
+        echo "apk_name=${FINAL_NAME}" >> $GITHUB_OUTPUT
+        echo "app_version=v${APP_VERSION}" >> $GITHUB_OUTPUT
+        echo "apk_path=ready-to-publish/${FINAL_NAME}" >> $GITHUB_OUTPUT
+
+    - name: 12. Phát hành bài đăng (GitHub Release) để Tải Trực Tiếp APK
+      uses: softprops/action-gh-release@v2
       with:
-        name: Backrooms-Mobile-APK
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        tag_name: ${{ steps.apk_process.outputs.app_version }}
+        name: Backrooms Mobile Bản Đóng Gói Chỉnh Chu ${{ steps.apk_process.outputs.app_version }}
+        body: |
+          ## 🎮 Bản phát hành Game hoàn chỉnh từ hệ thống Tự động hóa
+          
+          * **Phiên bản hiện tại:** `${{ steps.apk_process.outputs.app_version }}`
+          * **Chữ ký bảo mật:** Đã được ký bằng Keystore độc quyền (Vượt rào kiểm tra Google Play Protect).
+          * **Đồ họa ứng dụng:** Đã tự động tích hợp Icon/Splash Screen từ thư mục `assets/`.
+          
+          ---
+          👇 **TẢI TRỰC TIẾP FILE SẢN PHẨM KHÔNG CẦN GIẢI NÉN TẠI ĐÂY:**
+        draft: false
+        prerelease: false
+        files: ${{ steps.apk_process.outputs.apk_path }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
