@@ -1,6 +1,6 @@
 {
   "name": "backrooms-mobile",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Backrooms 3D Mobile Game",
   "main": "www/index.html",
   "devDependencies": {
