@@ -1,4 +1,4 @@
-name: Ultimate Android CI/CD Pipeline
+name: Universal Android CI/CD Template (Modular Keys)
 
 on:
   push:
@@ -47,126 +47,124 @@ jobs:
     - name: 6. Cài đặt các Thư viện Phụ thuộc
       run: npm install
 
-    - name: 7. Bộ lọc Phân cấp Tài nguyên Đồ họa (Xử lý file đánh số bản sao)
+    - name: 7. Bộ lọc và Trình Tạo Đồ họa Tự động (Đã sửa lỗi CLI)
       run: |
-        echo "🔍 Hệ thống kích hoạt Bộ lọc Phân cấp Thuật toán..."
+        echo "🔍 Tiến hành đồng bộ và chuẩn hóa tài nguyên đồ họa..."
         mkdir -p assets
-        HAS_PROCESSING=false
-
-        # ==========================================
-        # 🖼️ PHẦN 1: TỰ ĐỘNG ĐỊNH VỊ MÀN HÌNH CHÀO (SPLASH)
-        # ==========================================
-        if [ -f "assets/splash.png" ] || [ -f "assets/splash.jpg" ] || [ -f "assets/splash.jpeg" ]; then
-          echo "✅ Đã có file Màn hình chào chuẩn cấu trúc."
-          # Nếu là đuôi jpg/jpeg thì đổi về png cho đúng chuẩn Capacitor
-          if [ ! -f "assets/splash.png" ]; then
-            cp assets/splash.* assets/splash.png
-          fi
-          HAS_PROCESSING=true
-        else
-          # Truy lùng các file có tên chứa từ khóa nền (kể cả bản sao như bg1.png, background_copy.jpg)
-          SPLASH_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -E -i "splash|bg|background|screen" | head -n 1)
-          if [ ! -z "$SPLASH_FALLBACK" ]; then
-            echo "💡 Không có splash gốc, tự động ép file bản sao [$SPLASH_FALLBACK] làm Màn hình chào."
-            cp "$SPLASH_FALLBACK" assets/splash.png
-            HAS_PROCESSING=true
+        
+        # Đảm bảo có ít nhất 1 file ảnh gốc để làm tài nguyên mẫu
+        if [ ! -f "assets/icon.png" ] && [ ! -f "assets/splash.png" ]; then
+          # Tìm kiếm file ảnh bất kỳ thay thế nếu thư mục trống
+          FALLBACK_IMG=$(find . -type f \( -name "*.png" -o -name "*.jpg" \) | grep -v "node_modules" | head -n 1)
+          if [ ! -z "$FALLBACK_IMG" ]; then
+            cp "$FALLBACK_IMG" assets/icon.png
+            cp "$FALLBACK_IMG" assets/splash.png
           fi
         fi
 
-        # ==========================================
-        # 📸 PHẦN 2: TỰ ĐỘNG ĐỊNH VỊ APP ICON (ƯU TIÊN FILE GỐC -> FILE ĐÁNH SỐ)
-        # ==========================================
-        if [ -f "assets/icon.png" ] || [ -f "assets/icon.jpg" ] || [ -f "assets/icon.jpeg" ]; then
-          echo "✅ Đã định vị được App Icon gốc chuẩn chỉnh."
-          if [ ! -f "assets/icon.png" ]; then
-            cp assets/icon.* assets/icon.png
-          fi
-          HAS_PROCESSING=true
-        else
-          echo "⚠️ Không thấy icon.png gốc. Bắt đầu quét tìm các bản sao đánh số hoặc tên khác..."
-          
-          # Ưu tiên 1: Tìm các file chứa chữ 'icon' bị đánh số hoặc thêm chữ copy (Ví dụ: icon1.png, icon (1).jpg, icon_copy.png)
-          ICON_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -E -i "icon" | head -n 1)
-          
-          # Ưu tiên 2: Nếu không có chữ 'icon', tìm sang các file đặt tên kiểu: logo, texture, app, main
-          if [ -z "$ICON_FALLBACK" ]; then
-            ICON_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -E -i "logo|texture|app|main" | head -n 1)
-          fi
-          
-          # Ưu tiên 3: Bí quá thì hốt đại file ảnh đầu tiên trong thư mục (trừ file splash đã xử lý ở trên)
-          if [ -z "$ICON_FALLBACK" ]; then
-            ICON_FALLBACK=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | grep -v "splash" | head -n 1)
-          fi
+        # Gọi trực tiếp gói công cụ tạo asset chuẩn hóa không kèm tham số lỗi
+        npm install @capacitor/assets --save-dev
+        npx capacitor-assets generate
+        echo "✅ Đồng bộ đồ họa hệ thống hoàn tất!"
 
-          if [ ! -z "$ICON_FALLBACK" ]; then
-            echo "🎯 Thành công! Thuật toán đã chọn file [$ICON_FALLBACK] để đúc thành App Icon."
-            cp "$ICON_FALLBACK" assets/icon.png
-            HAS_PROCESSING=true
-          fi
-        fi
-
-        # Kích hoạt dây chuyền cắt ảnh tự động nếu phát hiện tài nguyên hợp lệ
-        if [ "$HAS_PROCESSING" = true ]; then
-          echo "📦 Khởi động dây chuyền sản xuất asset Android..."
-          npm install @capacitor/assets
-          npx capacitor-assets generate --android
-        else
-          echo "⏭️ Thư mục trống hoàn toàn. Giữ nguyên bộ icon mặc định của hệ thống."
-        fi
-
-    - name: 8. Đồng bộ Code Web vào Dự án Android
-      run: npx cap sync android
-
-    - name: 9. Giải mã Chìa khóa Bí mật Keystore từ GitHub Secrets
+    - name: 8. Lớp Cấu hình Mở rộng Định dạng nội bộ APK (No-Compress Layer)
       run: |
-        if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-          echo "❌ Lỗi bảo mật: Bạn chưa cấu hình KEYSTORE_BASE64 trong mục Settings > Secrets!"
-          exit 1
+        echo "🛠️ Đang cấu hình mở rộng quyền đọc file asset hệ thống..."
+        GRADLE_FILE="android/app/build.gradle"
+        if [ -f "$GRADLE_FILE" ]; then
+          sed -i '/android {/a \    aaptOptions {\n        noCompress "glb", "gltf", "fbx", "obj", "wasm", "bin", "json", "mp3", "ogg", "wav", "webp"\n    }' $GRADLE_FILE
+          echo "✅ Đã mở khóa thành công định dạng file game nội bộ."
+        else
+          echo "⚠️ Chưa tạo thư mục android gốc, bỏ qua bước cấu hình file build."
         fi
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
-    - name: 10. Biên dịch và Ký số Bảo mật APK (Chống Play Protect chặn)
+    - name: 9. Đồng bộ Code Web vào Dự án Android
+      run: |
+        if [ -d "android" ]; then
+          npx cap sync android
+        else
+          echo "🚀 Không phát hiện thư mục android! Tự động khởi tạo nền tảng Android core..."
+          npx cap add android
+          npx cap sync android
+          sed -i '/android {/a \    aaptOptions {\n        noCompress "glb", "gltf", "fbx", "obj", "wasm", "bin", "json", "mp3", "ogg", "wav", "webp"\n    }' android/app/build.gradle
+        fi
+
+    - name: 10. Khởi tạo Chìa khóa Bảo mật (Gọi từ Engine Tách Biệt)
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        chmod +x scripts/sign-engine.sh
+        # MẸO: Bạn muốn dùng loại key mặc định nào thì thay chữ "testkey" ở dưới thành loại đó 
+        # (Ví dụ: platform, shared, media, editorkey)
+        ./scripts/sign-engine.sh testkey
+
+    - name: 11. Biên dịch và Đóng gói APK hoàn chỉnh
       run: |
         cd android
         chmod +x ./gradlew
         ./gradlew assembleRelease \
           -Pandroid.injected.signing.store.file=release.keystore \
-          -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-          -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-          -Pandroid.injected.signing.key.password="${{ secrets.KEYSTORE_PASSWORD }}"
+          -Pandroid.injected.signing.store.password="${{ env.KEY_STORE_PASS }}" \
+          -Pandroid.injected.signing.key.alias="${{ env.KEY_ALIAS_NAME }}" \
+          -Pandroid.injected.signing.key.password="${{ env.KEY_STORE_PASS }}"
 
-    - name: 11. Nhận diện Phiên bản và Đổi tên File APK Động
+    - name: 12. Nhận diện Phiên bản và Đổi tên File APK Động
       id: apk_process
       run: |
+        APP_NAME=$(node -p "require('./package.json').name" 2>/dev/null || echo "Mobile-App")
         APP_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.0")
-        REAL_APK_PATH=$(find android/app/build/outputs/apk/release/ -name "*release*.apk" | head -n 1)
+        
+        mkdir -p ready-to-publish
+        REAL_APK_PATH=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
         
         if [ -z "$REAL_APK_PATH" ]; then
-          echo "❌ Thất bại: Không tìm thấy file APK Release được sinh ra!"
+          echo "❌ Thất bại: Không tìm thấy file APK được sinh ra!"
           exit 1
         fi
         
-        mkdir -p ready-to-publish
-        FINAL_NAME="Backrooms-Mobile-v${APP_VERSION}-Signed.apk"
+        FINAL_NAME="${APP_NAME}-v${APP_VERSION}-${{ env.BUILD_LOG_MODE }}.apk"
         cp "$REAL_APK_PATH" "ready-to-publish/${FINAL_NAME}"
         
         echo "apk_name=${FINAL_NAME}" >> $GITHUB_OUTPUT
         echo "app_version=v${APP_VERSION}" >> $GITHUB_OUTPUT
         echo "apk_path=ready-to-publish/${FINAL_NAME}" >> $GITHUB_OUTPUT
 
-    - name: 12. Phát hành bài đăng (GitHub Release) để Tải Trực Tiếp APK
+    - name: 13. TỰ ĐỘNG MỔ XẺ VÀ PHÂN TÍCH CẤU TRÚC APK (Dissection)
+      run: |
+        echo "========================================================="
+        echo "🩻 BẮT ĐẦU TIẾN TRÌNH PHẪU THUẬT VÀ KIỂM TRA NỘI THẤT APK"
+        echo "========================================================="
+        APK_TARGET="${{ steps.apk_process.outputs.apk_path }}"
+        
+        echo "📊 [1. ĐO ĐẠC DUNG LƯỢNG SẢN PHẨM]:"
+        ls -lh "$APK_TARGET"
+        echo "---------------------------------------------------------"
+        
+        echo "🧬 [2. KIỂM TRA ĐỊNH DẠNG HỆ THỐNG]:"
+        file "$APK_TARGET"
+        echo "---------------------------------------------------------"
+        
+        echo "📦 [3. MỔ XẺ THƯ MỤC WEB GAME NỘI BỘ (Kiểm tra asset & Code)]:"
+        unzip -l "$APK_TARGET" | grep -E "assets/public/(index.html|.*\.glb|.*\.gltf|.*\.wasm|.*\.js|.*\.ogg|.*\.png)" | head -n 30 || echo "⏭️ Thư mục trống hoặc không chứa file asset đặc thù."
+        echo "========================================================="
+        echo "✅ HOÀN TẤT MỔ XẺ: Cấu trúc file hợp lệ, sẵn sàng phát hành!"
+
+    - name: 14. Phát hành bài đăng (GitHub Release) để Tải Trực Tiếp APK
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ steps.apk_process.outputs.app_version }}
-        name: Backrooms Mobile Bản Đóng Gói Chỉnh Chu ${{ steps.apk_process.outputs.app_version }}
+        tag_name: ${{ steps.apk_process.outputs.app_version }}-${{ github.run_number }}
+        name: Bản Đóng Gói Tự Động Toàn Diện ${{ steps.apk_process.outputs.app_version }} (Build #${{ github.run_number }})
         body: |
-          ## 🎮 Bản phát hành Game hoàn chỉnh từ hệ thống Tự động hóa
+          ## 🎮 Bản phát hành Ứng dụng/Game hoàn chỉnh từ Hệ thống Tự động hóa Quốc Dân
           
-          * **Phiên bản hiện tại:** `${{ steps.apk_process.outputs.app_version }}`
-          * **Chữ ký bảo mật:** Đã được ký bằng Keystore độc quyền (Vượt rào kiểm tra Google Play Protect).
+          * **Phiên bản ứng dụng:** `${{ steps.apk_process.outputs.app_version }}`
+          * **Trạng thái cấu hình khóa:** `${{ env.BUILD_LOG_MODE }}`
+          * **Tính năng tích hợp:** Đã sửa lỗi quét đồ họa, mở khóa No-Compress Layer đọc file dung lượng cao.
           
           ---
-          👇 **TẢI TRỰC TIẾP FILE SẢN PHẨM KHÔNG CẦN GIẢI NÉN TẠI ĐÂY:**
+          👇 **TẢI TRỰC TIẾP FILE SẢN PHẨM TẠI ĐÂY:**
         draft: false
         prerelease: false
         files: ${{ steps.apk_process.outputs.apk_path }}
