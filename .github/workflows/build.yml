@@ -47,23 +47,47 @@ jobs:
     - name: 6. Cài đặt các Thư viện Phụ thuộc
       run: npm install
 
-    - name: 7. Tự động nhận diện và Xử lý Đồ họa (Icon & Splash Screen)
+    - name: 7. Tự động nhận diện và Xử lý Đồ họa Thông minh
       run: |
-        if [ -f "assets/icon.png" ] || [ -f "assets/splash.png" ]; then
-          echo "🚀 Phát hiện tài nguyên! Đang thiết lập công cụ đồ họa..."
+        echo "🔍 Đang quét và kiểm tra tài nguyên hình ảnh..."
+        mkdir -p assets
+        
+        # 🤖 CƠ CHẾ TỰ ĐỘNG NHẬN DIỆN ICON THAY THẾ
+        HAS_IMAGE=false
+        
+        if [ -f "assets/icon.png" ]; then
+          echo "✅ Đã tìm thấy file icon.png chuẩn."
+          HAS_IMAGE=true
+        elif [ -f "assets/texture.png" ]; then
+          echo "💡 Không thấy icon.png nhưng phát hiện texture.png! Tự động chọn làm Icon game."
+          cp assets/texture.png assets/icon.png
+          HAS_IMAGE=true
+        elif [ -f "assets/logo.png" ]; then
+          echo "💡 Không thấy icon.png nhưng phát hiện logo.png! Tự động chọn làm Icon game."
+          cp assets/logo.png assets/icon.png
+          HAS_IMAGE=true
+        fi
+
+        # 🤖 CƠ CHẾ TỰ ĐỘNG NHẬN DIỆN SPLASH THAY THẾ
+        if [ -f "assets/splash.png" ]; then
+          echo "✅ Đã tìm thấy file splash.png chuẩn."
+          HAS_IMAGE=true
+        elif [ -f "assets/background.png" ]; then
+          echo "💡 Không thấy splash.png nhưng phát hiện background.png! Tự động chọn làm Màn hình chào."
+          cp assets/background.png assets/splash.png
+          HAS_IMAGE=true
+        fi
+
+        # 🚀 TIẾN HÀNH XỬ LÝ NẾU CÓ ẢNH HỢP LỆ
+        if [ "$HAS_IMAGE" = true ]; then
+          echo "📦 Đang cài đặt công cụ xử lý đồ họa nâng cao..."
           npm install @capacitor/assets
           
-          if [ -f "assets/icon.png" ]; then
-            echo "📸 Đang tự động cắt hệ thống App Icon cho mọi màn hình..."
-            npx capacitor-assets generate --android --icon
-          fi
-          
-          if [ -f "assets/splash.png" ]; then
-            echo "🖼️ Đang tự động thiết lập Màn hình chào (Splash Screen) dọc..."
-            npx capacitor-assets generate --android --splash
-          fi
+          echo "📸 Đang tự động tối ưu hóa và xuất bản vẽ thiết kế ảnh..."
+          # FIX: Loại bỏ hoàn toàn flag --icon / --splash lỗi, dùng lệnh chuẩn hóa hệ điều hành
+          npx capacitor-assets generate --android
         else
-          echo "⏭️ Không phát hiện file ảnh mới trong assets/. Giữ nguyên giao diện mặc định."
+          echo "⏭️ Không phát hiện bất kỳ file ảnh nào hợp lệ (icon, texture, logo, splash). Bỏ qua bước này và giữ icon mặc định."
         fi
 
     - name: 8. Đồng bộ Code Web vào Dự án Android
@@ -116,7 +140,6 @@ jobs:
           
           * **Phiên bản hiện tại:** `${{ steps.apk_process.outputs.app_version }}`
           * **Chữ ký bảo mật:** Đã được ký bằng Keystore độc quyền (Vượt rào kiểm tra Google Play Protect).
-          * **Đồ họa ứng dụng:** Đã tự động tích hợp Icon/Splash Screen từ thư mục `assets/`.
           
           ---
           👇 **TẢI TRỰC TIẾP FILE SẢN PHẨM KHÔNG CẦN GIẢI NÉN TẠI ĐÂY:**
